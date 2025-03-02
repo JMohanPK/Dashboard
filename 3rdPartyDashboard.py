@@ -136,7 +136,7 @@ def display_orders_analysis(df_orders, latest_orders):
         date_filter_option = st.selectbox(
             "Select timeframe",
             ["All", "Current Month", "Last 30 Days", "Last 7 Days", "Custom"],
-            key="orders_date_filter"
+            key="order_analysis_date_filter"
         )
     with col2:
         status_options = ["All"] + sorted(latest_orders["Order Status"].unique().tolist())
@@ -147,14 +147,16 @@ def display_orders_analysis(df_orders, latest_orders):
 
     # Custom date inputs below if selected
     today = datetime.now()
-    if date_filter_option == "Custom":
+    with st.expander("Custom Date Range", expanded=(date_filter_option == "Custom")):
         col1, col2 = st.columns(2)
         with col1:
-            start_date = st.date_input("Start date", today - timedelta(days=30), key="orders_start")
+            start_date_custom = st.date_input("Start date", today - timedelta(days=30), key="orders_start")
         with col2:
-            end_date = st.date_input("End date", today, key="orders_end")
-        start_date = datetime.combine(start_date, datetime.min.time())
-        end_date = datetime.combine(end_date, datetime.max.time())
+            end_date_custom = st.date_input("End date", today, key="orders_end")
+    
+    if date_filter_option == "Custom":
+        start_date = datetime.combine(start_date_custom, datetime.min.time())
+        end_date = datetime.combine(end_date_custom, datetime.max.time())
     else:
         if date_filter_option == "All":
             start_date, end_date = get_all_date_range(df_orders)
@@ -224,9 +226,8 @@ def display_orders_analysis(df_orders, latest_orders):
         fig = px.pie(status_counts, values='Count', names='Order Status', title='Order Status Distribution', hole=0.4, color_discrete_sequence=px.colors.qualitative.Set3)
         st.plotly_chart(fig, use_container_width=True)
     with col2:
-        trans_counts = filtered_latest['Transaction Type'].value_counts().reset_index()
-        trans_counts.columns = ['Transaction Type', 'Count']
-        fig = px.bar(trans_counts, x='Transaction Type', y='Count', title='Transaction Types', color='Count', color_continuous_scale='Blues')
+        test_real_data = pd.DataFrame({'Type': ['Real-Time', 'Test'], 'Count': [real_time_orders, test_orders]})
+        fig = px.bar(test_real_data, x='Type', y='Count', color='Type', title='Real-Time vs Test Orders', color_discrete_map={'Real-Time': '#72b7b2', 'Test': '#e377c2'})
         st.plotly_chart(fig, use_container_width=True)
     time_series = filtered_df.groupby(pd.Grouper(key='Date', freq='D')).size().reset_index(name='Orders')
     time_series['Date'] = time_series['Date'].dt.date
@@ -252,14 +253,19 @@ def display_orders_analysis(df_orders, latest_orders):
             ]}
         ))
         st.plotly_chart(fig, use_container_width=True)
-    with col2:
-        test_real_data = pd.DataFrame({'Type': ['Real-Time', 'Test'], 'Count': [real_time_orders, test_orders]})
-        fig = px.bar(test_real_data, x='Type', y='Count', color='Type', title='Test vs Real-Time Orders', color_discrete_map={'Real-Time': '#72b7b2', 'Test': '#e377c2'})
-        st.plotly_chart(fig, use_container_width=True)
-
+    
     # Download (unchanged)
-    csv = filtered_latest.to_csv(index=False).encode('utf-8')
-    st.download_button("Download Filtered Data", csv, "filtered_order_data.csv", "text/csv", key='orders_download')
+    st.markdown("<div class='section-title'>📥 Download Data</div>", unsafe_allow_html=True)
+    col1, col2 = st.columns(2)
+    with col1:
+        csv = filtered_latest.to_csv(index=False).encode('utf-8')
+        st.download_button("Download as CSV", csv, "filtered_order_data.csv", "text/csv", key='orders_download_csv')
+    with col2:
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            filtered_latest.to_excel(writer, index=False, sheet_name="Filtered Data")
+        excel_data = output.getvalue()
+        st.download_button("Download as Excel", excel_data, "filtered_order_data.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key='orders_download_excel')
 
 def display_subscriptions_analysis(df_subscriptions):
     st.markdown("<div class='section-title'>📅 Filter Options</div>", unsafe_allow_html=True)
@@ -271,7 +277,7 @@ def display_subscriptions_analysis(df_subscriptions):
         date_filter_option = st.selectbox(
             "Select timeframe",
             ["All", "Current Month", "Last 7 Days", "Custom"],
-            key="subs_date_filter"
+            key="manage_subscription_date_filter"
         )
     with col2:
         transaction_types = ["Add A Line", "Cancel Subscription", "Update A License"]
@@ -287,38 +293,26 @@ def display_subscriptions_analysis(df_subscriptions):
             key="subs_order_type"
         )
 
-    # Always render the date input widget
-    min_date = df_subscriptions["Date"].min().date()
-    max_date = df_subscriptions["Date"].max().date()
-    date_range = st.date_input(
-        "Custom Date Range",
-        [min_date, max_date],
-        min_value=min_date,
-        max_value=max_date,
-        key="subs_date_range",
-        disabled=(date_filter_option != "Custom"),
-        help="Select the date range for the 'Custom' timeframe option."
-    )
-
-    # Filter data based on selected timeframe
+    # Custom date inputs shown only when "Custom" is selected
+    today = datetime.now()
     filtered_df = df_subscriptions.copy()
+    
+    with st.expander("Custom Date Range", expanded=(date_filter_option == "Custom")):
+        col1, col2 = st.columns(2)
+        with col1:
+            start_date_custom = st.date_input("Start date", today - timedelta(days=30), key="subscription_start")
+        with col2:
+            end_date_custom = st.date_input("End date", today, key="subscription_end")
+    
     if date_filter_option == "Custom":
-        if len(date_range) == 2:  # Ensure two dates are selected
-            start_date, end_date = date_range
-            start_date = datetime.combine(start_date, datetime.min.time())
-            end_date = datetime.combine(end_date, datetime.max.time())
-            filtered_df = filtered_df[(filtered_df["Date"] >= pd.Timestamp(start_date)) & 
-                                     (filtered_df["Date"] <= pd.Timestamp(end_date))]
-    elif date_filter_option == "Current Month":
-        today = datetime.now()
-        start_of_month = datetime(today.year, today.month, 1)
-        filtered_df = filtered_df[(filtered_df["Date"] >= start_of_month) & 
-                                 (filtered_df["Date"] <= today)]
-    elif date_filter_option == "Last 7 Days":
-        seven_days_ago = datetime.now() - timedelta(days=7)
-        filtered_df = filtered_df[filtered_df["Date"] >= seven_days_ago]
-    elif date_filter_option == "All":
-        filtered_df = df_subscriptions.copy()
+        start_date = datetime.combine(start_date_custom, datetime.min.time())
+        end_date = datetime.combine(end_date_custom, datetime.max.time())
+        filtered_df = filtered_df[(filtered_df["Date"] >= pd.Timestamp(start_date)) & 
+                                 (filtered_df["Date"] <= pd.Timestamp(end_date))]
+    else:
+        if date_filter_option == "All":
+            # No additional filtering needed for "All"
+            filtered_df = df_subscriptions.copy()
 
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -411,16 +405,12 @@ def display_subscriptions_analysis(df_subscriptions):
         else:
             fig.update_layout(title="Daily Success Rate (No Data)", annotations=[{'text': "No data", 'xref': 'paper', 'yref': 'paper', 'x': 0.5, 'y': 0.5}])
         st.plotly_chart(fig, use_container_width=True)
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
     with col1:
-        tx_counts = filtered_df.groupby("Transaction Type").size().reset_index(name="Count")
-        fig = px.pie(tx_counts, values="Count", names="Transaction Type", title="Transaction Types", hole=0.4, color_discrete_sequence=px.colors.qualitative.Set3)
+        status_counts = filtered_df.groupby("Order Status").size().reset_index(name="Count")
+        fig = px.pie(status_counts, values="Count", names="Order Status", title="Order Status Distribution", hole=0.4, color_discrete_sequence=px.colors.qualitative.Set3)
         st.plotly_chart(fig, use_container_width=True)
     with col2:
-        status_counts = filtered_df.groupby("Order Status").size().reset_index(name="Count")
-        fig = px.bar(status_counts, x="Order Status", y="Count", title="Order Status", color="Order Status", color_discrete_map={"Successful": "#26A69A", "Failed": "#EF5350"})
-        st.plotly_chart(fig, use_container_width=True)
-    with col3:
         df_test = filtered_df.copy()
         df_test["Order Type"] = df_test["Test Order"].apply(lambda x: "Test" if x == "Yes" else "Real-Time")
         type_counts = df_test.groupby("Order Type").size().reset_index(name="Count")
