@@ -305,7 +305,28 @@ def display_subscriptions_analysis(df_subscriptions):
     
     # Ensure Date column is datetime
     df_subscriptions['Date'] = pd.to_datetime(df_subscriptions['Date'])
-    filtered_df = df_subscriptions.copy()
+    
+    # Populate missing OrderIds
+    def populate_order_ids(df):
+        # Create a copy to avoid modifying the original DataFrame
+        df_copy = df.copy()
+        
+        # Identify rows with empty OrderId
+        empty_order_mask = df_copy['OrderId'].isna() | (df_copy['OrderId'] == '')
+        
+        # Group rows by consecutive empty OrderId blocks
+        df_copy['order_group'] = (~empty_order_mask).cumsum()
+        
+        # Forward fill OrderId within each group
+        df_copy['OrderId'] = df_copy.groupby('order_group')['OrderId'].transform(lambda x: x.fillna(method='ffill'))
+        
+        # Drop the temporary grouping column
+        df_copy = df_copy.drop(columns=['order_group'])
+        
+        return df_copy
+
+    # Populate missing OrderIds before filtering
+    filtered_df = populate_order_ids(df_subscriptions)
     
     # Date filtering logic
     if date_filter_option == "Current Month":
@@ -327,12 +348,14 @@ def display_subscriptions_analysis(df_subscriptions):
             (filtered_df['Date'] <= pd.Timestamp(end_date))
         ]
 
+    # Remove header from the markdown
     st.markdown("</div>", unsafe_allow_html=True)
 
     # Apply additional filters
     if selected_transaction_types != "All":
         filtered_df = filtered_df[filtered_df["Transaction Type"] == selected_transaction_types]
     
+    # Consistent order type filtering
     if order_types == "Real-Time":
         filtered_df = filtered_df[
             (filtered_df["Test Order"].isna()) | 
@@ -342,56 +365,65 @@ def display_subscriptions_analysis(df_subscriptions):
     elif order_types == "Test":
         filtered_df = filtered_df[filtered_df["Test Order"].str.lower() == "yes"]
 
-    # Metrics calculation function
-    def count_distinct_orders(df):
+    def count_distinct_orders(df, order_type=None):
         if df.empty:
             return 0
-    
-        # Group by OrderId and get the latest row for each
-        latest_status_df = df.sort_values('Date').groupby('OrderId').last().reset_index()
-    
+        
+        # Create a copy to avoid modifying the original DataFrame
+        temp_df = df.copy()
+        
+        # Apply order type filter if specified
+        if order_type == "Real-Time":
+            temp_df = temp_df[
+                (temp_df["Test Order"].isna()) | 
+                (temp_df["Test Order"].str.lower() == "no") | 
+                (temp_df["Test Order"] == "")
+            ]
+        elif order_type == "Test":
+            temp_df = temp_df[temp_df["Test Order"].str.lower() == "yes"]
+        
+        # Sort by date to get the latest status
+        temp_df = temp_df.sort_values('Date')
+        
+        # Get the latest status for each OrderId
+        latest_status_df = temp_df.groupby('OrderId').last().reset_index()
+        
         # Count distinct orderIds
         return latest_status_df['OrderId'].nunique()
 
-    # Updated metrics calculation
+    # Metrics calculation
     metrics = {}
-    real_time_df = filtered_df[
-        (filtered_df["Test Order"].isna()) | 
-        (filtered_df["Test Order"].str.lower() == "no") | 
-        (filtered_df["Test Order"] == "")
-    ]
-    metrics["Total Real-Time Orders"] = count_distinct_orders(real_time_df)
-
+    metrics["Total Real-Time Orders"] = count_distinct_orders(filtered_df, "Real-Time")
+    
     def filter_transactions(df, transaction_type):
         return df[
             (df["Transaction Type"] == transaction_type) & 
-            ((df["Test Order"].isna()) | (df["Test Order"].str.lower() == "no") | (df["Test Order"] == "")) & 
             (df["Order Status"] == "Successful")
         ]
-
+    
     # Calculate metrics for different transaction types
     add_line_df = filter_transactions(filtered_df, "Add A Line")
-    metrics["Add-a-line Orders"] = count_distinct_orders(add_line_df)
-
+    metrics["Add-a-line Orders"] = count_distinct_orders(add_line_df, "Real-Time")
+    
     update_license_df = filter_transactions(filtered_df, "Update A License")
-    metrics["Update a License Orders"] = count_distinct_orders(update_license_df)
-
+    metrics["Update a License Orders"] = count_distinct_orders(update_license_df, "Real-Time")
+    
     cancel_subscription_df = filter_transactions(filtered_df, "Cancel Subscription")
-    metrics["Cancel Subscription Orders"] = count_distinct_orders(cancel_subscription_df)
-
+    metrics["Cancel Subscription Orders"] = count_distinct_orders(cancel_subscription_df, "Real-Time")
+    
     metrics["Successful Orders"] = (
         metrics["Add-a-line Orders"] + 
         metrics["Update a License Orders"] + 
         metrics["Cancel Subscription Orders"]
     )
-
+    
     failed_df = filtered_df[filtered_df["Order Status"] == "Failed"]
     metrics["Pending Orders"] = count_distinct_orders(failed_df)
-
+    
     test_df = filtered_df[filtered_df["Test Order"].str.lower() == "yes"]
-    metrics["Test Orders"] = count_distinct_orders(test_df)
+    metrics["Test Orders"] = count_distinct_orders(test_df, "Test")
 
-   
+    # Metrics Display
     st.markdown("<div class='section-title'>📌 Key Metrics</div>", unsafe_allow_html=True)
     col1, col2, col3, col4 = st.columns(4)
     with col1:
@@ -408,6 +440,7 @@ def display_subscriptions_analysis(df_subscriptions):
         success_rate = (metrics["Successful Orders"] / metrics["Total Real-Time Orders"] * 100) if metrics["Total Real-Time Orders"] > 0 else 0
         st.markdown(f"<div class='metric-card'><div class='metric-value'>{success_rate:.1f}%</div><div class='metric-title'>Success Rate</div></div>", unsafe_allow_html=True)
 
+   
     # Visualizations
     st.markdown("<div class='section-title'>📈 Analytics</div>", unsafe_allow_html=True)
     col1, col2 = st.columns(2)
