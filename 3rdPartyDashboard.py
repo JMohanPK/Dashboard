@@ -346,10 +346,14 @@ def display_subscriptions_analysis(df_subscriptions):
     def count_distinct_orders(df):
         if df.empty:
             return 0
-        orders_with_id = df[df["OrderId"].notna() & (df["OrderId"] != "")]
-        return orders_with_id["OrderId"].nunique()
+    
+        # Group by OrderId and get the latest row for each
+        latest_status_df = df.sort_values('Date').groupby('OrderId').last().reset_index()
+    
+        # Count distinct orderIds
+        return latest_status_df['OrderId'].nunique()
 
-    # Metrics calculation
+    # Updated metrics calculation
     metrics = {}
     real_time_df = filtered_df[
         (filtered_df["Test Order"].isna()) | 
@@ -357,34 +361,33 @@ def display_subscriptions_analysis(df_subscriptions):
         (filtered_df["Test Order"] == "")
     ]
     metrics["Total Real-Time Orders"] = count_distinct_orders(real_time_df)
-    
-    # Function to filter dataframes with consistent test order and status checks
+
     def filter_transactions(df, transaction_type):
         return df[
             (df["Transaction Type"] == transaction_type) & 
             ((df["Test Order"].isna()) | (df["Test Order"].str.lower() == "no") | (df["Test Order"] == "")) & 
             (df["Order Status"] == "Successful")
         ]
-    
+
     # Calculate metrics for different transaction types
     add_line_df = filter_transactions(filtered_df, "Add A Line")
     metrics["Add-a-line Orders"] = count_distinct_orders(add_line_df)
-    
+
     update_license_df = filter_transactions(filtered_df, "Update A License")
     metrics["Update a License Orders"] = count_distinct_orders(update_license_df)
-    
+
     cancel_subscription_df = filter_transactions(filtered_df, "Cancel Subscription")
     metrics["Cancel Subscription Orders"] = count_distinct_orders(cancel_subscription_df)
-    
+
     metrics["Successful Orders"] = (
         metrics["Add-a-line Orders"] + 
         metrics["Update a License Orders"] + 
         metrics["Cancel Subscription Orders"]
     )
-    
+
     failed_df = filtered_df[filtered_df["Order Status"] == "Failed"]
     metrics["Pending Orders"] = count_distinct_orders(failed_df)
-    
+
     test_df = filtered_df[filtered_df["Test Order"].str.lower() == "yes"]
     metrics["Test Orders"] = count_distinct_orders(test_df)
 
