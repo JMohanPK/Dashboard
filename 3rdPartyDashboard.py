@@ -14,7 +14,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom CSS (unchanged)
+# Custom CSS (unchanged from previous code)
 st.markdown("""
 <style>
     .main {
@@ -86,7 +86,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Data loading functions (unchanged)
+# Data loading functions
 @st.cache_data
 def load_orders_data(file):
     df = pd.read_excel(file, sheet_name="Consolidated Order Summary")
@@ -112,7 +112,7 @@ def load_subscriptions_data(file):
     df = df.sort_index().groupby("OrderId", as_index=False).last()
     return df
 
-# Helper functions (unchanged)
+# Helper functions
 def get_month_date_range():
     today = datetime.now()
     first_day = today.replace(day=1)
@@ -460,26 +460,48 @@ def display_subscriptions_analysis(df_subscriptions):
             excel_data = output.getvalue()
             st.download_button(label="Click to Download Excel", data=excel_data, file_name="filtered_subscription_data.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="subs_excel_download")
 
-# Main function with sidebar
-def main():
+# Page selection function
+def page_selection():
+    st.sidebar.title("Select Dashboard")
+    page = st.sidebar.radio("Go to", ["Home", "Order Analysis", "Manage Subscription"])
+    return page
+
+# Home page
+def home_page():
     st.title("📊 Order and Subscription Analysis Dashboard")
+    st.write("Welcome to the comprehensive analysis dashboard.")
+    st.write("Please select a dashboard from the sidebar to get started.")
+
+# Main function
+def main():
+    page = page_selection()
+    
     with st.sidebar:
         st.header("Upload Data")
         uploaded_file = st.file_uploader("Upload Excel File", type=["xlsx", "xls"])
+    
     if uploaded_file is not None:
         with st.spinner('Loading and processing data...'):
             try:
                 df_orders, latest_orders = load_orders_data(uploaded_file)
                 df_subscriptions = load_subscriptions_data(uploaded_file)
-                tab1, tab2 = st.tabs(["Order Analysis", "Manage Subscription"])
-                with tab1:
+                
+                if page == "Home":
+                    home_page()
+                elif page == "Order Analysis":
+                    st.title("📊 Order Analysis Dashboard")
                     display_orders_analysis(df_orders, latest_orders)
-                with tab2:
+                elif page == "Manage Subscription":
+                    st.title("🔄 Manage Subscription Dashboard")
                     display_subscriptions_analysis(df_subscriptions)
+            
             except Exception as e:
                 st.error(f"Error processing file: {e}")
     else:
-        st.info("Please upload an Excel file to view the dashboard")
+        if page == "Home":
+            home_page()
+        else:
+            st.info("Please upload an Excel file to view the dashboard")
 
 if __name__ == "__main__":
     main()
