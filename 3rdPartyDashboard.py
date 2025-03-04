@@ -180,7 +180,7 @@ def display_orders_analysis(df_orders, latest_orders):
     if selected_order_type == "Real-Time":
         filtered_latest = filtered_latest[(filtered_latest["Test Order"] == "No") | (filtered_latest["Test Order"].isna())]
     elif selected_order_type == "Test":
-        filtered_latest = filtered_latest[filtered_latest["Test Order"] == "Yes"]
+        filtered_latest = filtered_latest[(filtered_latest["Test Order"] == "Yes")]
 
     # Metrics (unchanged)
     total_orders = len(filtered_latest)
