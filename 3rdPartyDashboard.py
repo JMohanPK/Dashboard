@@ -342,7 +342,7 @@ def display_subscriptions_analysis(df_subscriptions):
     if order_types == "Real-Time":
         filtered_df = filtered_df[
             (filtered_df["Test Order"].isna()) | 
-            (filtered_df["Test Order"].str.lower() == "no") | 
+            (filtered_df["Test Order"].str.lower().isin(["no", "Nan"])) | 
             (filtered_df["Test Order"] == "")
         ]
     elif order_types == "Test":
