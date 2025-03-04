@@ -306,33 +306,13 @@ def display_subscriptions_analysis(df_subscriptions):
     # Ensure Date column is datetime
     df_subscriptions['Date'] = pd.to_datetime(df_subscriptions['Date'], errors='coerce')
     
-    # Populate missing OrderIds
-    def populate_order_ids(df):
-        df_copy = df.copy()
-        
-        # Group consecutive rows without OrderId
-        df_copy['order_group'] = (~df_copy['OrderId'].isna()).cumsum()
-        
-        # Forward fill OrderId within group
-        df_copy['OrderId'] = df_copy.groupby('order_group')['OrderId'].transform(lambda x: x.fillna(method='ffill'))
-        
-        # Drop the temporary grouping column
-        df_copy = df_copy.drop(columns=['order_group'])
-        
-        return df_copy
-
-    # Populate missing OrderIds before filtering
-    df_subscriptions = populate_order_ids(df_subscriptions)
-    
     # Date filtering logic
     filtered_df = df_subscriptions.copy()
     if date_filter_option == "Current Month":
-        first_day = today.replace(day=1)
-        _, last_day = calendar.monthrange(today.year, today.month)
-        last_date = today.replace(day=last_day)
+        first_day, last_date = get_month_date_range()
         filtered_df = filtered_df[
-            (filtered_df['Date'] >= pd.Timestamp(first_day)) & 
-            (filtered_df['Date'] <= pd.Timestamp(last_date))
+            (filtered_df['Date'].dt.date >= first_day) & 
+            (filtered_df['Date'].dt.date <= last_date)
         ]
     elif date_filter_option == "Last 7 Days":
         seven_days_ago = today - timedelta(days=7)
@@ -370,16 +350,12 @@ def display_subscriptions_analysis(df_subscriptions):
             "Add-a-line Orders": 0,
             "Update a License Orders": 0,
             "Cancel Subscription Orders": 0,
-            "Pending Orders": 0,
+            "Failed Orders": 0,
             "Test Orders": 0
         }
         
         # Real-Time Orders (excluding Test Orders)
-        real_time_df = df[
-            (df["Test Order"].isna()) | 
-            (df["Test Order"].str.lower() == "no") | 
-            (df["Test Order"] == "")
-        ]
+        real_time_df = df[df["Test Order"].str.lower() != "yes"]
         
         # Aggregate by OrderId to get unique orders
         unique_orders = real_time_df.groupby('OrderId').first().reset_index()
@@ -407,7 +383,7 @@ def display_subscriptions_analysis(df_subscriptions):
         
         # Failed Orders
         failed_unique = real_time_df[real_time_df["Order Status"] == "Failed"].groupby('OrderId').first().reset_index()
-        metrics["Pending Orders"] = len(failed_unique)
+        metrics["Failed Orders"] = len(failed_unique)
         
         # Test Orders
         test_df = df[df["Test Order"].str.lower() == "yes"]
@@ -427,7 +403,7 @@ def display_subscriptions_analysis(df_subscriptions):
         st.markdown(f"<div class='metric-card'><div class='metric-value'>{metrics['Successful Orders']}</div><div class='metric-title'>Successful Orders</div></div>", unsafe_allow_html=True)
     with col2:
         st.markdown(f"<div class='metric-card'><div class='metric-value'>{metrics['Add-a-line Orders']}</div><div class='metric-title'>Add-a-line Orders</div></div>", unsafe_allow_html=True)
-        st.markdown(f"<div class='metric-card'><div class='metric-value'>{metrics['Pending Orders']}</div><div class='metric-title'>Pending Orders</div></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='metric-card'><div class='metric-value'>{metrics['Failed Orders']}</div><div class='metric-title'>Failed Orders</div></div>", unsafe_allow_html=True)
     with col3:
         st.markdown(f"<div class='metric-card'><div class='metric-value'>{metrics['Update a License Orders']}</div><div class='metric-title'>Update a License Orders</div></div>", unsafe_allow_html=True)
         st.markdown(f"<div class='metric-card'><div class='metric-value'>{metrics['Test Orders']}</div><div class='metric-title'>Test Orders</div></div>", unsafe_allow_html=True)
@@ -436,8 +412,7 @@ def display_subscriptions_analysis(df_subscriptions):
         success_rate = (metrics["Successful Orders"] / metrics["Total Real-Time Orders"] * 100) if metrics["Total Real-Time Orders"] > 0 else 0
         st.markdown(f"<div class='metric-card'><div class='metric-value'>{success_rate:.1f}%</div><div class='metric-title'>Success Rate</div></div>", unsafe_allow_html=True)
 
-       
-    # Visualizations
+    # Visualizations (unchanged)
     st.markdown("<div class='section-title'>📈 Analytics</div>", unsafe_allow_html=True)
     col1, col2 = st.columns(2)
     with col1:
