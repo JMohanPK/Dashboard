@@ -310,13 +310,20 @@ def display_subscriptions_analysis(df_subscriptions):
     filtered_df = df_subscriptions.copy()
     if date_filter_option == "Current Month":
         first_day, last_date = get_month_date_range()
+        start_date = pd.Timestamp(first_day)
+        end_date = pd.Timestamp(last_date) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
         filtered_df = filtered_df[
-            (filtered_df['Date'].dt.date >= first_day) & 
-            (filtered_df['Date'].dt.date <= last_date)
+            (filtered_df['Date'] >= start_date) & 
+            (filtered_df['Date'] <= end_date)
         ]
     elif date_filter_option == "Last 7 Days":
         seven_days_ago = today.date() - timedelta(days=7)
-        filtered_df = filtered_df[filtered_df['Date'].dt.date >= seven_days_ago]
+        start_date = pd.Timestamp(seven_days_ago)
+        end_date = pd.Timestamp(today.date())
+        filtered_df = filtered_df[
+            (filtered_df['Date'] >= start_date) & 
+            (filtered_df['Date'] <= end_date)
+        ]
     elif date_filter_option == "Custom":
         start_date = datetime.combine(start_date_custom, datetime.min.time())
         end_date = datetime.combine(end_date_custom, datetime.max.time())
