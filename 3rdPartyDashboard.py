@@ -341,12 +341,12 @@ def display_subscriptions_analysis(df_subscriptions):
     # Order type filtering
     if order_types == "Real-Time":
         filtered_df = filtered_df[
-            (filtered_df["Test Order"].isna()) | 
-            (filtered_df["Test Order"].str.lower().isin(["no", "Nan"])) | 
+            (filtered_df["Test Order"] == "No") |
+            (filtered_df["Test Order"] == "Nan") |  
             (filtered_df["Test Order"] == "")
         ]
     elif order_types == "Test":
-        filtered_df = filtered_df[filtered_df["Test Order"].str.lower() == "yes"]
+        filtered_df = filtered_df[filtered_df["Test Order"] == "yes"]
 
     # Metrics calculation
     def calculate_metrics(df):
