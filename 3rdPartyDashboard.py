@@ -295,7 +295,6 @@ def display_subscriptions_analysis(df_subscriptions):
 
     # Custom date inputs shown only when "Custom" is selected
     today = datetime.now()
-    filtered_df = df_subscriptions.copy()
     
     with st.expander("Custom Date Range", expanded=(date_filter_option == "Custom")):
         col1, col2 = st.columns(2)
@@ -304,62 +303,92 @@ def display_subscriptions_analysis(df_subscriptions):
         with col2:
             end_date_custom = st.date_input("End date", today, key="subscription_end")
     
-    if date_filter_option == "Custom":
+    # Ensure Date column is datetime
+    df_subscriptions['Date'] = pd.to_datetime(df_subscriptions['Date'])
+    filtered_df = df_subscriptions.copy()
+    
+    # Date filtering logic
+    if date_filter_option == "Current Month":
+        first_day = today.replace(day=1)
+        _, last_day = calendar.monthrange(today.year, today.month)
+        last_date = today.replace(day=last_day)
+        filtered_df = filtered_df[
+            (filtered_df['Date'] >= pd.Timestamp(first_day)) & 
+            (filtered_df['Date'] <= pd.Timestamp(last_date))
+        ]
+    elif date_filter_option == "Last 7 Days":
+        seven_days_ago = today - timedelta(days=7)
+        filtered_df = filtered_df[filtered_df['Date'] >= pd.Timestamp(seven_days_ago)]
+    elif date_filter_option == "Custom":
         start_date = datetime.combine(start_date_custom, datetime.min.time())
         end_date = datetime.combine(end_date_custom, datetime.max.time())
-        filtered_df = filtered_df[(filtered_df["Date"] >= pd.Timestamp(start_date)) & 
-                                 (filtered_df["Date"] <= pd.Timestamp(end_date))]
-    else:
-        if date_filter_option == "All":
-            # No additional filtering needed for "All"
-            filtered_df = df_subscriptions.copy()
+        filtered_df = filtered_df[
+            (filtered_df['Date'] >= pd.Timestamp(start_date)) & 
+            (filtered_df['Date'] <= pd.Timestamp(end_date))
+        ]
 
     st.markdown("</div>", unsafe_allow_html=True)
 
     # Apply additional filters
     if selected_transaction_types != "All":
         filtered_df = filtered_df[filtered_df["Transaction Type"] == selected_transaction_types]
+    
     if order_types == "Real-Time":
-        filtered_df = filtered_df[(filtered_df["Test Order"] == "No") | 
-                                 (filtered_df["Test Order"] == "") | 
-                                 (filtered_df["Test Order"] == "Nan")]
+        filtered_df = filtered_df[
+            (filtered_df["Test Order"].isna()) | 
+            (filtered_df["Test Order"].str.lower() == "no") | 
+            (filtered_df["Test Order"] == "")
+        ]
     elif order_types == "Test":
-        filtered_df = filtered_df[filtered_df["Test Order"] == "Yes"]
+        filtered_df = filtered_df[filtered_df["Test Order"].str.lower() == "yes"]
 
-    # Metrics
+    # Metrics calculation function
     def count_distinct_orders(df):
         if df.empty:
             return 0
         orders_with_id = df[df["OrderId"].notna() & (df["OrderId"] != "")]
         return orders_with_id["OrderId"].nunique()
 
+    # Metrics calculation
     metrics = {}
-    real_time_df = filtered_df[(filtered_df["Test Order"] == "No") | (filtered_df["Test Order"] == "") | (filtered_df["Test Order"] == "Nan")]
+    real_time_df = filtered_df[
+        (filtered_df["Test Order"].isna()) | 
+        (filtered_df["Test Order"].str.lower() == "no") | 
+        (filtered_df["Test Order"] == "")
+    ]
     metrics["Total Real-Time Orders"] = count_distinct_orders(real_time_df)
-    add_line_df = filtered_df[
-        (filtered_df["Transaction Type"] == "Add A Line") & 
-        ((filtered_df["Test Order"] == "No") | (filtered_df["Test Order"] == "") | (filtered_df["Test Order"] == "Nan")) & 
-        (filtered_df["Order Status"] == "Successful")
-    ]
+    
+    # Function to filter dataframes with consistent test order and status checks
+    def filter_transactions(df, transaction_type):
+        return df[
+            (df["Transaction Type"] == transaction_type) & 
+            ((df["Test Order"].isna()) | (df["Test Order"].str.lower() == "no") | (df["Test Order"] == "")) & 
+            (df["Order Status"] == "Successful")
+        ]
+    
+    # Calculate metrics for different transaction types
+    add_line_df = filter_transactions(filtered_df, "Add A Line")
     metrics["Add-a-line Orders"] = count_distinct_orders(add_line_df)
-    update_license_df = filtered_df[
-        (filtered_df["Transaction Type"] == "Update A License") & 
-        ((filtered_df["Test Order"] == "No") | (filtered_df["Test Order"] == "") | (filtered_df["Test Order"] == "Nan")) & 
-        (filtered_df["Order Status"] == "Successful")
-    ]
+    
+    update_license_df = filter_transactions(filtered_df, "Update A License")
     metrics["Update a License Orders"] = count_distinct_orders(update_license_df)
-    cancel_subscription_df = filtered_df[
-        (filtered_df["Transaction Type"] == "Cancel Subscription") & 
-        ((filtered_df["Test Order"] == "No") | (filtered_df["Test Order"] == "") | (filtered_df["Test Order"] == "Nan")) & 
-        (filtered_df["Order Status"] == "Successful")
-    ]
+    
+    cancel_subscription_df = filter_transactions(filtered_df, "Cancel Subscription")
     metrics["Cancel Subscription Orders"] = count_distinct_orders(cancel_subscription_df)
-    metrics["Successful Orders"] = metrics["Add-a-line Orders"] + metrics["Update a License Orders"] + metrics["Cancel Subscription Orders"]
+    
+    metrics["Successful Orders"] = (
+        metrics["Add-a-line Orders"] + 
+        metrics["Update a License Orders"] + 
+        metrics["Cancel Subscription Orders"]
+    )
+    
     failed_df = filtered_df[filtered_df["Order Status"] == "Failed"]
     metrics["Pending Orders"] = count_distinct_orders(failed_df)
-    test_df = filtered_df[filtered_df["Test Order"] == "Yes"]
+    
+    test_df = filtered_df[filtered_df["Test Order"].str.lower() == "yes"]
     metrics["Test Orders"] = count_distinct_orders(test_df)
 
+   
     st.markdown("<div class='section-title'>📌 Key Metrics</div>", unsafe_allow_html=True)
     col1, col2, col3, col4 = st.columns(4)
     with col1:
