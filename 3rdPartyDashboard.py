@@ -315,8 +315,8 @@ def display_subscriptions_analysis(df_subscriptions):
             (filtered_df['Date'].dt.date <= last_date)
         ]
     elif date_filter_option == "Last 7 Days":
-        seven_days_ago = today - timedelta(days=7)
-        filtered_df = filtered_df[filtered_df['Date'] >= pd.Timestamp(seven_days_ago)]
+        seven_days_ago = today.date() - timedelta(days=7)
+        filtered_df = filtered_df[filtered_df['Date'].dt.date >= seven_days_ago]
     elif date_filter_option == "Custom":
         start_date = datetime.combine(start_date_custom, datetime.min.time())
         end_date = datetime.combine(end_date_custom, datetime.max.time())
@@ -412,7 +412,7 @@ def display_subscriptions_analysis(df_subscriptions):
         success_rate = (metrics["Successful Orders"] / metrics["Total Real-Time Orders"] * 100) if metrics["Total Real-Time Orders"] > 0 else 0
         st.markdown(f"<div class='metric-card'><div class='metric-value'>{success_rate:.1f}%</div><div class='metric-title'>Success Rate</div></div>", unsafe_allow_html=True)
 
-    # Visualizations (unchanged)
+    # Visualizations
     st.markdown("<div class='section-title'>📈 Analytics</div>", unsafe_allow_html=True)
     col1, col2 = st.columns(2)
     with col1:
@@ -457,6 +457,10 @@ def display_subscriptions_analysis(df_subscriptions):
     st.markdown("<div class='section-title'>📋 Filtered Data</div>", unsafe_allow_html=True)
     display_columns = ["Date", "OrderId", "Transaction Type", "Order Status", "Comments", "Test Order"]
     display_df = filtered_df[display_columns].copy()
+    
+    # Format the Date column as MM/DD/YY for display
+    display_df["Date"] = display_df["Date"].dt.strftime("%m/%d/%y")
+    
     items_per_page = 10
     total_items = len(display_df)
     total_pages = (total_items // items_per_page) + (1 if total_items % items_per_page > 0 else 0)
@@ -465,7 +469,8 @@ def display_subscriptions_analysis(df_subscriptions):
     start_idx = (st.session_state.subs_page - 1) * items_per_page
     end_idx = min(start_idx + items_per_page, total_items)
     if total_pages > 0:
-        st.dataframe(display_df.iloc[start_idx:end_idx].reset_index(drop=True), use_container_width=True)
+        display_df_paginated = display_df.iloc[start_idx:end_idx].reset_index(drop=True)
+        st.dataframe(display_df_paginated, use_container_width=True)
         st.text(f"Showing {start_idx + 1} to {end_idx} of {total_items} entries")
         col1, col2, col3 = st.columns([1, 1, 3])
         with col1:
