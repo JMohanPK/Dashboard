@@ -1,25 +1,3 @@
-In this code, when updating the status of the orderIds with multiple statuses, I have asked to update the last available status of the orderId. Currently, the orderId count is attributed to the month in which it was successfully processed.
-This is causing an variance in the monthly count.
-
-If an orderId has multiple lines in the input file, update the last available status -this is correct, but this should be attributed to the month the order was first available.
-
-For e.g.
-
-Date|OrderId|Order Status
-01/20/2025|123456789|Pending
-01/25/2025|123456789|Pending
-01/30/2025|123456789|Successful
-01/25/2025|321456987|Pending
-02/01/2025|321456987|Successful
-02/25/2025|112233445|Pending
-03/01/2025|112233445|Successful
-
-Total orders = 3
-Successful OrderId count for Jan - 2
-Successful OrderId count for Feb - 1
-
-code:
-
 import pandas as pd
 import streamlit as st
 import plotly.express as px
