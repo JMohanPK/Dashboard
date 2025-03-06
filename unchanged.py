@@ -88,25 +88,10 @@ st.markdown("""
 
 # Data loading functions
 @st.cache_data
-@st.cache_data
 def load_orders_data(file):
     df = pd.read_excel(file, sheet_name="Consolidated Order Summary")
     df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
-    
-    # Get first appearance date for each OrderId
-    first_dates = df.sort_values(['OrderId', 'Date']).groupby('OrderId')['Date'].first().reset_index()
-    first_dates = first_dates.rename(columns={'Date': 'FirstAppearanceDate'})
-    
-    # Get latest status for each OrderId
-    latest_status = df.sort_values(['OrderId', 'Date']).groupby('OrderId').last().reset_index()
-    
-    # Merge first date with latest status
-    latest_orders = pd.merge(latest_status, first_dates, on='OrderId', how='left')
-    
-    # Replace the current date with the first appearance date
-    latest_orders['OriginalDate'] = latest_orders['Date']  # Keep original date if needed
-    latest_orders['Date'] = latest_orders['FirstAppearanceDate']
-    
+    latest_orders = df.sort_values(['OrderId', 'Date']).groupby('OrderId').last().reset_index()
     return df, latest_orders
 
 @st.cache_data
